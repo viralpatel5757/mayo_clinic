@@ -1,0 +1,28 @@
+---
+
+# Verify that user can deploy an AutoML-text model to an endpoint via Vertex AI
+
+# --------------- Scenario 1 : text model already deployed to respective endpoint --------------------------#
+
+- name: get list models already deployed to an "text_endpoint" endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints describe {{ endpoint_id }} --project={{ project }} --region={{ vertex_region }}
+    --flatten=deployedModels[] --format=csv(deployedModels.displayName)
+  register: deploy_text_model_response
+  when:
+    - endpoint_name_list is defined
+    - "'text_endpoint' in endpoint_name_list"
+
+# ----- Scenario 2 : text model has not been deployed to respective endpoint,
+#                    thus deploying the text model ------------#
+
+- name: deploy the model to an endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints deploy-model {{ endpoint_id }} --region={{ vertex_region }} --model={{ model_id }}
+    --display-name=deploy_text_model --machine-type=n1-standard-2 --min-replica-count=1
+    --max-replica-count=1 --traffic-split=0=100
+  register: newly_deploy_text_model_response
+  when: >
+    (deploy_text_model_response.stdout is not defined) or
+    ((deploy_text_model_response.stdout is defined) and
+    ('deploy_text_model' not in deploy_text_model_response.stdout))

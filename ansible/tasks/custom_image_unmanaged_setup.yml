@@ -1,0 +1,60 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Container Trained Image Models from VAI-un-managed datasets as Follows:
+
+# ----------------------- build container and push it to GAR ---------------------------#
+- name: Configure docker to use GAR (Google Artifact Registry)
+  ansible.builtin.command: "gcloud auth configure-docker {{ vertex_region }}-docker.pkg.dev --quiet"
+  changed_when: false
+
+- name: Get GAR repo full path
+  ansible.builtin.shell: |
+    set -o pipefail && gcloud artifacts repositories list |grep -ie 'shared' |grep -e '-main-' |awk '{print $1}'
+  args:
+    executable: /bin/bash
+  register: gar_repo_name
+  changed_when: false
+
+- name: set full GAR path
+  ansible.builtin.set_fact:
+    gar_repo: "{{ vertex_region }}-docker.pkg.dev/{{ project }}/{{ gar_repo_name.stdout }}"
+
+- name: set image URI
+  ansible.builtin.set_fact:
+    image_uri: "{{ gar_repo }}/cust_image_unmanged"
+
+- name: set image tag
+  ansible.builtin.set_fact:
+    image_tag: "{{ image_uri }}:latest"
+
+- name: set working folder
+  ansible.builtin.command: "pwd"
+  register: work_folder
+  changed_when: false
+
+- name: Get target GAR custom container existing status
+  ansible.builtin.command: "gcloud artifacts docker images list {{ gar_repo }} "
+  register: cntr_already_exist
+  changed_when: false
+
+- name: copy pip.conf
+  ansible.builtin.command: cp /etc/pip.conf {{ role_path }}/files/custom_containers/unmanaged_custom_container/pip.conf
+  changed_when: false
+
+- name: get CertEmulationCA
+  ansible.builtin.command: |
+    cp /usr/local/share/ca-certificates/CertEmulationCA.crt
+    {{ role_path }}/files/custom_containers/unmanaged_custom_container/CertEmulationCA.crt
+  changed_when: false
+
+- name: build an image
+  ansible.builtin.shell: |
+    cd {{ role_path }}/files/custom_containers/unmanaged_custom_container;
+    docker build -t {{ image_tag }} .;
+    cd {{ work_folder }}
+  when: "image_uri not in cntr_already_exist.stdout"
+
+- name: push image to GAR
+  ansible.builtin.command: "docker push {{ image_tag }}"
+  when: "image_uri not in cntr_already_exist.stdout"
+  changed_when: false

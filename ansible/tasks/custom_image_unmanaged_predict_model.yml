@@ -1,0 +1,33 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Container Trained Image Models from VAI-un-managed datasets as Follows:
+#   1) Verify that user can make a prediction from a deployed VAI-Imported Customer Image model via Vertex AI
+
+# ----------------------- online prediction using deployed model-------------------------#
+
+# Verify that user can make an online prediction from a deployed custom_image_unmanaged model via Vertex AI
+
+- name: Execute ansible.builtin.command to perform online prediction using custom_image_unmanaged model
+  ansible.builtin.command: |
+    gcloud ai endpoints predict {{ endpoint_id }} --region={{ vertex_region }}
+    --json-request={{ role_path }}/files/custom_image_unmanaged_model_prediction.json
+  register: predict_model_response
+  changed_when: false
+
+- name: prediction information
+  ansible.builtin.debug:
+    msg:
+      - "{{ lookup('file', 'model_image_labels.txt') }}"
+      - "{{ predict_model_response.stdout }}"
+
+- name: Set status flag
+  ansible.builtin.set_fact: predict_custom_image_unmanaged_model_status="Passed"
+  when: predict_model_response.stdout | length > 0
+
+- name: Log predict using custom_image_unmanaged-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "predict using custom_image_unmanaged model" {{ predict_custom_image_unmanaged_model_status }}
+    "User can do prediction using custom_image_unmanaged model" "https://rb.gy/3irw8v"
+  args:
+    executable: python3
+  when: predict_model_response.stdout | length > 0

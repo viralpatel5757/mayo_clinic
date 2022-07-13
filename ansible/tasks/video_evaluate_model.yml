@@ -1,0 +1,24 @@
+---
+
+# Verify that user can evaluate an AutoML-video model via Vertex AI
+
+- name: Evaluate video model
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models/{{ model_id }}/evaluations"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: evaluate_model_video_response
+
+- name: Set status flag
+  ansible.builtin.set_fact: evaluate_video_model_status="Passed"
+  when: evaluate_model_video_response.status == 200
+
+- name: Log evaluate video-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Evaluate video Model" {{ evaluate_video_model_status }}
+    "User can Evaluate video-Model" "https://rb.gy/0sdpkd"
+  args:
+    executable: python3

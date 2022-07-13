@@ -1,0 +1,118 @@
+---
+
+# Verify that user can import an image data into an image dataset via Vertex AI
+
+# --------------- Scenario 1 : image Data already exists in respective image Dataset --------------------#
+- name: Data is already present in dataset, no need to import it.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/\
+         {{ project }}/locations/{{ vertex_region }}/datasets/{{ dataset_id }}/dataItems"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_image_response
+  when: "(dataset_name is defined) and ('test_new_image_dataset' in dataset_name)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_image_dataset_status="Passed"
+  when:
+    - "(dataset_name is defined) and ('test_new_image_dataset' in dataset_name)"
+    - load_image_response | length > 0
+
+- name: Log video-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load image Dataset" {{ load_image_dataset_status }}
+    "User can create and load image-dataset" "https://rb.gy/y1hjeb"
+  args:
+    executable: python3
+  when: "(dataset_name is defined) and ('test_new_image_dataset' in dataset_name)"
+
+# ---- Scenario 2 : image Data does not exists in respective image Dataset, so user needs to import it. ----#
+
+- name: Template entity flowers.csv
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/flowers.csv.j2"
+    dest: "{{ role_path }}/files/flowers.csv"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: upload flowers.csv to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp {{ role_path }}/files/flowers.csv {{ shared_bucket }}vai_testing/image/flowers.csv
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: upload flower images (data) to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp -r {{ role_path }}/files/flowers {{ shared_bucket }}vai_testing/image/flowers
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: Template entity image_dataset_import.json
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/image_dataset_import.json.j2"
+    dest: "{{ role_path }}/files/image_dataset_import.json"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: Execute ansible.builtin.command to load image data to image-dataset through REST API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/\
+         {{ project }}/locations/{{ vertex_region }}/datasets/{{ dataset_id }}:import"
+    method: POST
+    body: "{{ lookup('file','image_dataset_import.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_image_response
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: wait until image data is imported.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/\
+         {{ project }}/locations/{{ vertex_region }}/datasets/{{ load_image_response.json.name.split('/')[5] }}\
+         /operations/{{ load_image_response.json.name.split('/')[7] }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_image_response1
+  until: load_image_response1.json.done | default(false) | bool
+  retries: 60
+  delay: 30
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: image dataset status
+  ansible.builtin.debug:
+    msg: "{{ load_image_response }}"
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_image_dataset_status="Passed"
+  when:
+    - "(dataset_name is not defined) or ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))"
+    - load_image_response1.status == 200
+
+- name: Log image-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load Image Dataset" {{ load_image_dataset_status }}
+    "User can create and load an image based dataset" "https://rb.gy/y1hjeb"
+  args:
+    executable: python3
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))

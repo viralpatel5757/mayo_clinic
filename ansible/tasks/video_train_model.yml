@@ -1,0 +1,204 @@
+---
+
+# Verify that user can train an AutoML-video model via Vertex AI
+
+# --------------- Scenario 1 : video model already exists in respective project --------------------------#
+- name: Get the List of existing models.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_list
+
+- name: get the list of existing model names
+  ansible.builtin.set_fact:
+    model_name_list: "{{ (model_list.json.models | map (attribute='displayName')) }}"
+  when: "model_list.json is defined"
+
+- name: get model id of existing model
+  ansible.builtin.set_fact:
+    model_id: "{{ model_list.json.models | json_query(query) | map('split', '/')|map(attribute=5)|list |first }}"
+  vars:
+    query: "[?displayName == 'video_new_training'].name"
+  when:
+    - model_name_list is defined
+    - "'video_new_training' in model_name_list"
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_video_dataset_status="Passed"
+  when:
+    - model_name_list is defined
+    - "'video_new_training' in model_name_list"
+
+- name: Log train-video-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Train video Dataset" {{ train_video_dataset_status }}
+    "User can train video-dataset" "https://rb.gy/etclpx"
+  args:
+    executable: python3
+  when:
+    - model_name_list is defined
+    - "'video_new_training' in model_name_list"
+
+# --------------- Scenario 2 : video model does not exists in respective project --------------------------#
+
+- name: Template entity training model
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/video_train.json.j2"
+    dest: "{{ role_path }}/files/video_train.json"
+    mode: 0644
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: train a video model
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/trainingPipelines"
+    method: POST
+    body: "{{ lookup('file','video_train.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: train_video_response
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: Pause for 50 minutes
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+  ansible.builtin.pause:
+    minutes: 50
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: Pause for 50 minutes
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+  ansible.builtin.pause:
+    minutes: 50
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: Pause for 50 minutes
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+  ansible.builtin.pause:
+    minutes: 50
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: Pause for 50 minutes
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+  ansible.builtin.pause:
+    minutes: 50
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: Pause for 50 minutes
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+  ansible.builtin.pause:
+    minutes: 50
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: wait until video model gets trained
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/trainingPipelines/{{ train_video_response.json.name.split('/')[5] }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: train_video_response1
+  until: train_video_response1.json.state is defined and train_video_response1.json.state == "PIPELINE_STATE_SUCCEEDED"
+  retries: 30
+  delay: 90
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: ansible.builtin.debugging the video model
+  ansible.builtin.debug:
+    msg: "{{ train_video_response1 }}"
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: set model name
+  ansible.builtin.set_fact:
+    model_name: "{{ train_video_response.json.modelToUpload.displayName }}"
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: Get video model information
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models?filter=display_name={{ model_name }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_video_response
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: set model ID
+  ansible.builtin.set_fact:
+    model_id: "{{ model_video_response.json.models.0.name.split('/')[5] }}"
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: showing the model id
+  ansible.builtin.debug:
+    msg: "{{ model_id }}"
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_video_dataset_status="Passed"
+  when:
+    - "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"
+    - train_video_response1.json.state == "PIPELINE_STATE_SUCCEEDED"
+
+- name: Log train-video-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI - Train video Dataset" {{ train_video_dataset_status }}
+    "User can train video-dataset" "https://rb.gy/etclpx"
+  args:
+    executable: python3
+  when: "(model_name_list is not defined) or ('video_new_training' not in model_name_list)"

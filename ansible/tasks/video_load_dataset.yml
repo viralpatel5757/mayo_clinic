@@ -1,0 +1,117 @@
+---
+
+# Verify that user can import an video data into an video dataset via Vertex AI
+
+# --------------- Scenario 1 : video Data already exists in respective video Dataset -------------------#
+- name: Data is already present in dataset, no need to import it.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ dataset_id }}/dataItems"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_video_response
+  when: "(dataset_name is defined) and ('test_new_video_dataset' in dataset_name)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_video_dataset_status="Passed"
+  when:
+    - "(dataset_name is defined) and ('test_new_video_dataset' in dataset_name)"
+    - load_video_response | length > 0
+
+- name: Log video-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load video Dataset" {{ load_video_dataset_status }}
+    "User can create and load video-dataset" "https://rb.gy/sryt81"
+  args:
+    executable: python3
+  when: "(dataset_name is defined) and ('test_new_video_dataset' in dataset_name)"
+
+# --- Scenario 2 : video Data does not exists in respective video Dataset, so user needs to import it. ----#
+- name: upload video data folder to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp -r {{ role_path }}/files/hmdb51 {{ shared_bucket }}vai_testing/video/hmdb51
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: Template video data CVS file
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/hmdb_split1_5classes_all.csv.j2"
+    dest: "{{ role_path }}/files/hmdb_split1_5classes_all.csv"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: upload video data CVS file to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp {{ role_path }}/files/hmdb_split1_5classes_all.csv {{ shared_bucket }}vai_testing/video
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: Template entity import dataset
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/video_dataset_import.json.j2"
+    dest: "{{ role_path }}/files/video_dataset_import.json"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: Execute ansible.builtin.command to load video data to video-dataset through REST API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ dataset_id }}:import"
+    method: POST
+    body: "{{ lookup('file','video_dataset_import.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_video_response
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: wait untill video data is imported.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ load_video_response.json.name.split('/')[5] }}/\
+         operations/{{ load_video_response.json.name.split('/')[7] }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_video_response1
+  until: load_video_response1.json.done | default(false) | bool
+  retries: 5
+  delay: 60
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: video dataset status
+  ansible.builtin.debug:
+    msg: "{{ load_video_response }}"
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_video_dataset_status="Passed"
+  when:
+    - "(dataset_name is not defined) or ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))"
+    - load_video_response.status == 200
+
+- name: Log video-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load video Dataset" {{ load_video_dataset_status }}
+    "User can create and load video-dataset" "https://rb.gy/sryt81"
+  args:
+    executable: python3
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_video_dataset' not in dataset_name))

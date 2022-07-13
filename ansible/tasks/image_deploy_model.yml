@@ -1,0 +1,27 @@
+---
+
+# Verify that user can deploy an AutoML-image model to an endpoint via Vertex AI
+
+# ------------ Scenario 1 : image model already deployed to respective endpoint -------------#
+
+- name: get list of already deployed models to an "image_endpoint" endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints describe {{ endpoint_id }} --project={{ project }} --region={{ vertex_region }}
+    --flatten=deployedModels[] --format=csv(deployedModels.displayName)
+  register: deploy_image_model_response
+  when:
+     - endpoint_name_list is defined
+     - "'image_endpoint' in endpoint_name_list"
+
+# -- Scenario 2 : image model has not been deployed to respective endpoint,thus deploying the image model --#
+
+- name: deploy the model to an endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints deploy-model {{ endpoint_id }} --region={{ vertex_region }} --model={{ model_id }}
+    --display-name=deploy_image_model --machine-type=n1-standard-2 --min-replica-count=1 --max-replica-count=1
+    --traffic-split=0=100
+  register: newly_deploy_image_model_response
+  when: >
+    (deploy_image_model_response.stdout is not defined) or
+    ((deploy_image_model_response.stdout is defined) and
+    ('deploy_image_model' not in deploy_image_model_response.stdout))

@@ -1,0 +1,34 @@
+---
+
+# Verify that user can make an online prediction from a deployed AutoML-tabular model via Vertex AI
+
+- name: Execute ansible.builtin.command to perform online prediction using tabular Automl model
+  ansible.builtin.command: >
+    gcloud ai endpoints predict {{ endpoint_id }} --region={{ vertex_region }}
+    --json-request={{ role_path }}/files/tabular_model_prediction.json
+  register: predict_model_response
+  changed_when: false
+
+- name: prediction information
+  ansible.builtin.debug:
+    msg: "{{ predict_model_response.stdout }}"
+
+- name: Set status flag
+  ansible.builtin.set_fact: predict_tabular_model_status="Passed"
+  when: predict_model_response.stdout | length > 0
+
+- name: Log predict tabular-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "predict using tabular model" {{ predict_tabular_model_status }}
+    "User can do prediction using tabular model" "https://rb.gy/vdwrgq"
+  args:
+    executable: python3
+  when: predict_model_response.stdout | length > 0
+
+- name: Cleanup duplicate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ role_path }}/files/tabular_request.json"
+    - "{{ role_path }}/files/tabular_train.json"

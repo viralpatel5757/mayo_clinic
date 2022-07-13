@@ -1,0 +1,64 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Container Trained Image Models from VAI-un-managed datasets as Follows:
+#  1) Verify that user can import a Custom Image model to Vertex AI - with a VAI-pre-built prediction container
+
+# ----------------------------------------Importing the Model ------------------------------------------#
+
+# verify is user can import the trained custom_image_unmanaged Model from GCS bucket to vertex AI
+# Local Ref: https://cloud.google.com/vertex-ai/docs/general/import-model#aiplatform_upload_model_sample-gcloud
+
+# --------------- Scenario 1 : custom_image_unmanaged model already exists in Vertex AI --------#
+- name: Get the List of existing models.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_list
+
+- name: get the list of existing model names
+  ansible.builtin.set_fact:
+    model_name_list: "{{ (model_list.json.models | map (attribute='displayName')) }}"
+  when: "model_list.json is defined"
+
+- name: get model id of existing model
+  ansible.builtin.set_fact:
+    model_id: "{{ model_list.json.models | json_query(query) | map('split', '/')|map(attribute=5)|list |first }}"
+  vars:
+    query: "[?displayName == 'custom_image_unmanaged_training'].name"
+  when:
+    - model_name_list is defined
+    - "'custom_image_unmanaged_training' in model_name_list"
+
+# --------------- Scenario 2 : Import custom_image_unmanaged model in Vertex AI --------#
+- name: importing custom_image_unmanaged model from GCS to Vertex ai
+  ansible.builtin.command: >
+    gcloud ai models upload --region={{ vertex_region }} --display-name=custom_image_unmanaged_training
+    --container-image-uri=us-docker.pkg.dev/vertex-ai/prediction/tf2-cpu.2-3:latest
+    --artifact-ansible.builtin.uri={{ shared_bucket }}vai_testing/custom/gar_custct/custom_image_unmanaged_training
+  register: import_model_response
+  when: "(model_name_list is not defined) or ('custom_image_unmanaged_training' not in model_name_list)"
+
+- name: ansible.builtin.pause for 10 sec
+  when: "(model_name_list is not defined) or ('custom_image_unmanaged_training' not in model_name_list)"
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Get custom_image_unmanaged model information.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models?filter=display_name=custom_image_unmanaged_training"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_info
+  when: "(model_name_list is not defined) or ('custom_image_unmanaged_training' not in model_name_list)"
+
+- name: set model ID
+  ansible.builtin.set_fact:
+    model_id: "{{ model_info.json.models.0.name.split('/')[5] }}"
+  when: "(model_name_list is not defined) or ('custom_image_unmanaged_training' not in model_name_list)"

@@ -1,0 +1,103 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on VAI-Prebuilt Container Trained Custom Tabular Models from VAI-managed datasets (vmds) as Follows:
+# 1) Verify that user can create and load a VAI-managed Tabular dataset
+
+# ------------------------- create prebuilt_tabular_managed_dataset datasaet---------------------------#
+
+# -- Scenario 1 : prebuilt_tabular_managed_dataset already exists with imported data in respective project ---#
+
+- name: Check whether a tabular dataset named "prebuilt_tabular_managed_dataset" exist or not through API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: dataset_list
+
+- name: get dataset name
+  ansible.builtin.set_fact:
+    dataset_name: "{{ (dataset_list.json.datasets | map (attribute='displayName')) }}"
+  when: dataset_list.json | length > 0
+
+- name: get dataset id
+  ansible.builtin.set_fact:
+    dataset_id: "{{ dataset_list.json.datasets | json_query(query) | map('split', '/')|map(attribute=5)|list |first }}"
+  vars:
+    query: "[?displayName == 'prebuilt_tabular_managed_dataset'].name"
+  when: "(dataset_name is defined) and ('prebuilt_tabular_managed_dataset' in dataset_name)"
+
+- name: Data is already present in dataset, no need to import it.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ dataset_id }}/dataItems"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_prebuilt_tabular_managed_response
+  when: "(dataset_name is defined) and ('prebuilt_tabular_managed_dataset' in dataset_name)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_prebuilt_tabular_managed_dataset_status="Passed"
+  when:
+    - "(dataset_name is defined) and ('prebuilt_tabular_managed_dataset' in dataset_name)"
+    - load_prebuilt_tabular_managed_response | length > 0
+
+- name: Log prebuilt_tabular_managed-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load prebuilt_tabular_managed Dataset" {{ load_prebuilt_tabular_managed_dataset_status }}
+    "User can create and load prebuilt_tabular_managed-dataset" "https://rb.gy/ksksvo"
+  args:
+    executable: python3
+  when: "(dataset_name is defined) and ('prebuilt_tabular_managed_dataset' in dataset_name)"
+
+# --- Scenario 2 : tabular Dataset does not exists in respective project, So create an tabular Dataset ----#
+- name: Template entity prebuilt_tabular_managed_dataset.json
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/prebuilt_tabular_managed_dataset.json.j2"
+    dest: "{{ role_path }}/files/prebuilt_tabular_managed_dataset.json"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('prebuilt_tabular_managed_dataset' not in dataset_name))
+
+- name: Create a prebuilt_tabular_managed dataset through API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets"
+    method: POST
+    body: "{{ lookup('file','prebuilt_tabular_managed_dataset.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_prebuilt_tabular_managed_response
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('prebuilt_tabular_managed_dataset' not in dataset_name))
+
+- name: Set Dataset ID
+  ansible.builtin.set_fact:
+    dataset_id: "{{ load_prebuilt_tabular_managed_response.json.name.split('/')[5] }}"
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('prebuilt_tabular_managed_dataset' not in dataset_name))
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_prebuilt_tabular_managed_dataset_status="Passed"
+  when:
+    - "(dataset_name is not defined) or ((dataset_name is defined) and ('prebuilt_tabular_managed_dataset' not in dataset_name))"
+    - load_prebuilt_tabular_managed_response.status == 200
+
+- name: Log prebuilt_tabular_managed-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load prebuilt_tabular_managed Dataset" {{ load_prebuilt_tabular_managed_dataset_status }}
+    "User can create and load prebuilt_tabular_managed-dataset" "https://rb.gy/ksksvo"
+  args:
+    executable: python3
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('prebuilt_tabular_managed_dataset' not in dataset_name))

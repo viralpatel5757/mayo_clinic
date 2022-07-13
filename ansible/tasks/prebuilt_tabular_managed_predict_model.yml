@@ -1,0 +1,40 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on VAI-Prebuilt Container Trained Custom Tabular Models from VAI-managed datasets (vmds) as Follows:
+# 1) Verify that user can make an online prediction from the deployed Customer Tabular model via Vertex AI
+
+# --------------------- online prediction using deployed model--------------------------#
+
+# Verify that user can make an online prediction from a deployed prebuilt_tabular_managed model via Vertex AI
+
+- name: Execute ansible.builtin.command to perform online prediction using prebuilt_tabular_managed model
+  ansible.builtin.command: >
+    gcloud ai endpoints predict {{ endpoint_id }} --region={{ vertex_region }}
+    --json-request={{ role_path }}/files/prebuilt_tabular_managed_model_prediction.json
+  register: predict_model_response
+  changed_when: false
+
+- name: prediction information
+  ansible.builtin.debug:
+    msg:
+      - "{{ predict_model_response.stdout }}"
+
+- name: Set status flag
+  ansible.builtin.set_fact: predict_prebuilt_tabular_managed_model_status="Passed"
+  when: predict_model_response.stdout | length > 0
+
+- name: Log predict using prebuilt_tabular_managed-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "predict using prebuilt_tabular_managed model"
+    {{ predict_prebuilt_tabular_managed_model_status }}
+    "User can do prediction using prebuilt_tabular_managed model" "https://rb.gy/6wrgu2"
+  args:
+    executable: python3
+  when: predict_model_response.stdout | length > 0
+
+- name: Cleanup duplicate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ role_path }}/files/prebuilt_tabular_managed_train.json"

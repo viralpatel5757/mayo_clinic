@@ -1,0 +1,109 @@
+---
+
+# Verify that user can import a text data into a text dataset via Vertex AI
+
+# --------------- Scenario 1 : text Data already exists in respective text Dataset --------------------------#
+- name: Data is already present in dataset, no need to import it.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ dataset_id }}/dataItems"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_text_response
+  when: "(dataset_name is defined) and ('test_new_text_dataset' in dataset_name)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_text_dataset_status="Passed"
+  when:
+    - "(dataset_name is defined) and ('test_new_text_dataset' in dataset_name)"
+    - load_text_response | length > 0
+
+- name: Log text-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load text Dataset" {{ load_text_dataset_status }}
+    "User can create and load text-dataset" "https://rb.gy/czus6q"
+  args:
+    executable: python3
+  when: "(dataset_name is defined) and ('test_new_text_dataset' in dataset_name)"
+
+# ---- Scenario 2 : text Data does not exists in respective text Dataset, so user needs to import it. ------#
+- name: upload happiness.csv to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp {{ role_path }}/files/happiness.csv {{ shared_bucket }}vai_testing/text/happiness.csv
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and
+    ('test_new_text_dataset' not in dataset_name))
+
+- name: Template entity import dataset
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/text_dataset_import.json.j2"
+    dest: "{{ role_path }}/files/text_dataset_import.json"
+    mode: 0644
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))
+
+- name: Execute ansible.builtin.command to load text data to text-dataset through REST API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ dataset_id }}:import"
+    method: POST
+    body: "{{ lookup('file','text_dataset_import.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_text_response
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))
+
+- name: wait untill text data is imported.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets/{{ load_text_response.json.name.split('/')[5] }}/\
+         operations/{{ load_text_response.json.name.split('/')[7] }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: load_text_response1
+  until: load_text_response1.json.done | default(false) | bool
+  retries: 60
+  delay: 30
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))
+
+# - name: Pause for 30 minutes
+#   when: >
+#     (dataset_name is not defined) or
+#     ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))
+#   ansible.builtin.pause:
+#     minutes: 30
+
+- name: text dataset status
+  ansible.builtin.debug:
+    msg: "{{ load_text_response }}"
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))
+
+- name: Set status flag
+  ansible.builtin.set_fact: load_text_dataset_status="Passed"
+  when:
+    - "(dataset_name is not defined) or ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))"
+    - load_text_response.status == 200
+
+- name: Log text-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Create/Load Text Dataset" {{ load_text_dataset_status }}
+    "User can create and load text-dataset" "https://rb.gy/czus6q"
+  args:
+    executable: python3
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_text_dataset' not in dataset_name))

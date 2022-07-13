@@ -1,0 +1,78 @@
+---
+
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Container Trained Image Models from VAI-un-managed datasets as Follows:
+
+# 1) Verify that user can train a Custom Image model from VAI-un-managed dataset
+#    via a custom job with a custom Container inside GAR
+
+# --------------------------------------- Training a Model--------------------------------#
+
+# ------ Scenario 1 : custom_image_unmanaged model already exists in GCS bucket of respective project -----#
+- name: check if model already exist in GCS bucket or not
+  ansible.builtin.command: gsutil ls {{ shared_bucket }}vai_testing/custom/gar_custct/custom_image_unmanaged_training
+  register: gcs_model_list
+  changed_when: false
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_custom_image_unmanaged_status="Passed"
+  when: "(gcs_model_list.stdout is defined) and ('saved_model.pb' in gcs_model_list.stdout)"
+
+- name: Log custom_image_unmanaged-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Train custom_image_unmanaged Dataset" {{ train_custom_image_unmanaged_status }}
+    "custom_image_unmanaged rained model is alredy present in GCS bucket" "https://rb.gy/fefntw"
+  args:
+    executable: python3
+  when: "(gcs_model_list.stdout is defined) and ('saved_model.pb' in gcs_model_list.stdout)"
+
+# ------- Scenario 2 : creat custom_image_unmanaged model as it does not exists in respective project ------#
+
+- name: create custom job to train custom_image_unmanaged model
+  ansible.builtin.command: >
+    gcloud ai custom-jobs create --display-name=custom_image_unmanaged_training --region={{ vertex_region }}
+    --project={{ project }} --config={{ role_path }}/files/custom_containers/unmanaged_custom_container/config.yaml
+    --worker-pool-spec=replica-count=1,machine-type="n1-highmem-2",container-image-uri="{{ gar_repo }}/cust_image_unmanged"
+    --args=--model-dir="{{ shared_bucket }}vai_testing/custom/gar_custct/custom_image_unmanaged_training",--batch-size=128,--epochs=5
+  register: train_custom_image_unmanaged_response
+  when: "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"
+
+- name: ansible.builtin.pause for 10 sec
+  when: "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: get the custom job id
+  ansible.builtin.set_fact:
+    custom_job_id: >-
+      {{
+        train_custom_image_unmanaged_response.stderr_lines
+        | select('search', 'describe')
+        | list
+        | regex_search('.*/customJobs/(\d+)', '\1')
+        | first
+      }}
+  when: "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"
+
+- name: waite until custom job gets trained.
+  ansible.builtin.command: >
+    gcloud ai custom-jobs describe projects/{{ project }}/locations/{{ vertex_region }}/customJobs/{{ custom_job_id }}
+  register: custom_job_response
+  until: "'JOB_STATE_SUCCEEDED' in custom_job_response.stdout"
+  retries: 15
+  delay: 60
+  when: "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_custom_image_unmanaged_status="Passed"
+  when:
+    - "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"
+    - "'JOB_STATE_SUCCEEDED' in custom_job_response.stdout"
+
+- name: Log image-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Train custom_image_unmanaged Dataset" {{ train_custom_image_unmanaged_status }}
+    "User can train custom_image_unmanaged-dataset" "https://rb.gy/fefntw"
+  args:
+    executable: python3
+  when: "(gcs_model_list.stdout is not defined) or ('saved_model.pb' not in gcs_model_list.stdout)"

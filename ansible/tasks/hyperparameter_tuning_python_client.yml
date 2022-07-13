@@ -1,0 +1,106 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Built Container Hyperparameter Tuning using VAI-un-managed datasets (vumds) as Follows:
+
+# Verify that user can cancel and delete a Python-Client-Initiated runningHypptune job
+# using the Custom-Built Hypptune Container via Python Client
+# docs: https://cloud.google.com/vertex-ai/docs/training/using-hyperparameter-tuning#aiplatform_create_hyperparameter_tuning_job_python_package_sample-python
+# step by step: https://codelabs.developers.google.com/vertex_hyperparameter_tuning#0
+
+# --------------- create, cancel and delete hyperparameter_tuning_job via python client -----------------#
+
+- name: Template entity to Start a training hypptune job
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/hyperparameter_tuning_python_client.py.j2"
+    dest: "{{ role_path }}/files/hyperparameter_tuning_python_client.py"
+    mode: 0644
+
+- name: Start a training hypptune job via python client
+  ansible.builtin.command: python {{ role_path }}/files/hyperparameter_tuning_python_client.py
+  register: hyper_tuning_job_python_client
+  changed_when: false
+
+- name: get the hyper_tuning_job_id
+  ansible.builtin.set_fact:
+    hyper_tuning_job_id: >-
+      {{
+       hyper_tuning_job_python_client.stdout_lines
+       | select('search', 'hyperparameterTuningJobs')
+       | list
+       | regex_search('.*/hyperparameterTuningJobs/(\\d+)', '\\1')
+       | first
+      }}
+
+- name: Wait for 5 sec
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Template entity to cancel a hypptune job
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/hypertune_python_client_job_cancel.py.j2"
+    dest: "{{ role_path }}/files/hypertune_python_client_job_cancel.py"
+    mode: 0644
+
+- name: Canceling the running hypptune job via python client
+  ansible.builtin.command: python {{ role_path }}/files/hypertune_python_client_job_cancel.py
+  register: hypptune_job_cancel_python_client
+  changed_when: false
+
+- name: Waiting until the training job gets canceled
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/hyperparameterTuningJobs/{{ hyper_tuning_job_id }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: hypptune_job_cancel_python_client1
+  until: hypptune_job_cancel_python_client1.json.state == "JOB_STATE_CANCELLED"
+  retries: 12
+  delay: 5
+
+- name: Set status flag
+  ansible.builtin.set_fact: hypptune_job_cancel_python_client_status="Passed"
+  when: hypptune_job_cancel_python_client1.json.state == "JOB_STATE_CANCELLED"
+
+- name: Log perform_hyper_tuning_job results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "cancel hyperparameter_tuning_job" {{ hypptune_job_cancel_python_client_status }}
+    "User can cancel hyperparameter_tuning_job via python client" "https://rb.gy/3twazr"
+  args:
+    executable: python3
+
+- name: Template entity to delete a hypptune job
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/hypertune_python_client_job_delete.py.j2"
+    dest: "{{ role_path }}/files/hypertune_python_client_job_delete.py"
+    mode: 0644
+
+- name: Delete the previously canceled Hypptune job
+  ansible.builtin.command: python {{ role_path }}/files/hypertune_python_client_job_delete.py
+  register: hypptune_job_delete_python_client
+  changed_when: false
+
+- name: delete_python_client response
+  ansible.builtin.debug:
+    msg: "{{ hypptune_job_delete_python_client }}"
+
+- name: Set status flag
+  ansible.builtin.set_fact: hypptune_job_delete_python_client_status="Passed"
+  when: hypptune_job_delete_python_client.rc == 0
+
+- name: Log perform_hyper_tuning_job results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "delete hyperparameter_tuning_job" {{ hypptune_job_delete_python_client_status }}
+    "User can delete hyperparameter_tuning_job via python client" "https://rb.gy/3twazr"
+  args:
+    executable: python3
+
+- name: Cleanup duplicate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ role_path }}/files/hyperparameter_tuning_python_client.py"
+    - "{{ role_path }}/files/hypertune_python_client_job_cancel.py"
+    - "{{ role_path }}/files/hypertune_python_client_job_delete.py"

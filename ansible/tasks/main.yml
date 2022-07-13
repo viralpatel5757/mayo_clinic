@@ -1,0 +1,190 @@
+---
+# tasks file for Vertex
+
+- name: Get Auth Token
+  ansible.builtin.command: gcloud auth application-default print-access-token
+  register: gcloud_auth_token
+  changed_when: false
+
+- name: Set Auth Token
+  ansible.builtin.set_fact:
+    gcloud_auth: '{{ gcloud_auth_token.stdout }}'
+
+- name: install jmespath module
+  ansible.builtin.command: "pip install jmespath"
+  changed_when: false
+
+- name: Set region region for vertex AI
+  ansible.builtin.set_fact:
+    vertex_region: us-central1
+
+# ------------------------- Image Data ------------------------ #
+- name: Execute Vertex AI create image dataset Test Scenario
+  include: image_create_dataset.yml
+
+- name: Execute Vertex AI load image dataset Test Scenario
+  include: image_load_dataset.yml
+
+- name: Execute Vertex AI train image model Test Scenario
+  include: image_train_model.yml
+
+- name: Execute Vertex AI evaluate image model Test Scenario
+  include: image_evaluate_model.yml
+
+- name: Execute Vertex AI create image endpoint Test Scenario
+  include: image_create_endpoint.yml
+
+- name: Execute Vertex AI deploy image model Test Scenario
+  include: image_deploy_model.yml
+
+- name: Execute Vertex AI predict image data Test Scenario
+  include: image_data_prediction.yml
+
+# ------------------------- tabular Data ------------------------ #
+- name: Execute Vertex AI create tabular dataset Test Scenario
+  include: tabular_create_dataset.yml
+
+- name: Execute Vertex AI train tabular model Test Scenario
+  include: tabular_train_model.yml
+
+- name: Execute Vertex AI evaluate tabular model Test Scenario
+  include: tabular_evaluate_model.yml
+
+- name: Execute Vertex AI create tabular endpoint Test Scenario
+  include: tabular_create_endpoint.yml
+
+- name: Execute Vertex AI deploy tabular model Test Scenario
+  include: tabular_deploy_model.yml
+
+- name: Execute Vertex AI predict tabular data Test Scenario
+  include: tabular_data_prediction.yml
+
+# ------------------------- text Data ------------------------ #
+# - name: Execute Vertex AI create text dataset Test Scenario
+#   include: text_create_dataset.yml
+
+# - name: Execute Vertex AI load text dataset Test Scenario
+#   include: text_load_dataset.yml
+
+# - name: Execute Vertex AI train text model Test Scenario
+#   include: text_train_model.yml
+
+# - name: Execute Vertex AI evaluate text model Test Scenario
+#   include: text_evaluate_model.yml
+
+# - name: Execute Vertex AI create text endpoint Test Scenario
+#   include: text_create_endpoint.yml
+
+# - name: Execute Vertex AI deploy text model Test Scenario
+#   include: text_deploy_model.yml
+
+# - name: Execute Vertex AI predict text data Test Scenario
+#   include: text_data_prediction.yml
+
+# ------------------------- Video Data ------------------------ #
+# - name: Execute Vertex AI create video dataset Test Scenario
+#   include: video_create_dataset.yml
+
+# - name: Execute Vertex AI load video dataset Test Scenario
+#   include: video_load_dataset.yml
+
+# - name: Execute Vertex AI train video model Test Scenario
+#   include: video_train_model.yml
+
+# - name: Execute Vertex AI evaluate video model Test Scenario
+#   include: video_evaluate_model.yml
+
+# - name: Execute Vertex AI create video endpoint Test Scenario
+#   include: video_create_endpoint.yml
+
+# ------------------ custom-container ---------------------- #
+# ----------------------- custom_image_unmanaged  -------------- #
+
+# - name: Execute Vertex custom_image_unmanaged_setup Test Scenario
+#   include: custom_image_unmanaged_setup.yml
+
+# - name: Execute Vertex custom_image_unmanaged_endpoint Test Scenario
+#   include: custom_image_unmanaged_endpoint.yml
+
+# - name: Execute Vertex custom_image_unmanaged_training Test Scenario
+#   include: custom_image_unmanaged_training.yml
+
+# - name: Execute Vertex custom_image_unmanaged_import_model Test Scenario
+#   include: custom_image_unmanaged_import_model.yml
+
+# - name: Execute Vertex custom_image_unmanaged_deploy_model Test Scenario
+#   include: custom_image_unmanaged_deploy_model.yml
+
+# - name: Execute Vertex custom_image_unmanaged_predict_model Test Scenario
+#   include: custom_image_unmanaged_predict_model.yml
+
+# -------------------- custom_tabular_managed ------------------------ #
+# - name: Execute Vertex custom_tabular_managed_setup Test Scenario
+#   include: custom_tabular_managed_setup.yml
+
+# - name: Execute Vertex custom_tabular_managed_endpoint Test Scenario
+#   include: custom_tabular_managed_endpoint.yml
+
+# - name: Execute Vertex custom_tabular_managed_dataset Test Scenario
+#   include: custom_tabular_managed_dataset.yml
+
+# - name: Execute Vertex custom_tabular_managed_training Test Scenario
+#   include: custom_tabular_managed_training.yml
+
+# - name: Execute Vertex custom_tabular_managed_deploy_model Test Scenario
+#   include: custom_tabular_managed_deploy_model.yml
+
+# - name: Execute Vertex custom_tabular_managed_predict_model Test Scenario
+#   include: custom_tabular_managed_predict_model.yml
+
+# ------------------ prebuilt-container ---------------------- #
+# ------------------ prebuilt_image_unmanaged ----------------- #
+
+# - name: Execute Vertex prebuilt_image_unmanaged_setup Test Scenario
+#   include: prebuilt_image_unmanaged_setup.yml
+
+# - name: Execute Vertex prebuilt_image_unmanaged_endpoint Test Scenario
+#   include: prebuilt_image_unmanaged_endpoint.yml
+
+# - name: Execute Vertex prebuilt_image_unmanaged_training Test Scenario
+#   include: prebuilt_image_unmanaged_training.yml
+
+# - name: Execute Vertex prebuilt_image_unmanaged_deploy_model Test Scenario
+#   include: prebuilt_image_unmanaged_deploy_model.yml
+
+# - name: Execute Vertex prebuilt_image_unmanaged_predict_model Test Scenario
+#   include: prebuilt_image_unmanaged_predict_model.yml
+
+# ------------------- prebuilt_tabular_managed ------------------- #
+
+# - name: Execute Vertex prebuilt_tabular_managed_setup Test Scenario
+#   include: prebuilt_tabular_managed_setup.yml
+
+# - name: Execute Vertex prebuilt_tabular_managed_endpoint Test Scenario
+#   include: prebuilt_tabular_managed_endpoint.yml
+
+# - name: Execute Vertex prebuilt_tabular_managed_dataset Test Scenario
+#   include: prebuilt_tabular_managed_dataset.yml
+
+# - name: Execute Vertex prebuilt_tabular_managed_training Test Scenario
+#   include: prebuilt_tabular_managed_training.yml
+
+# - name: Execute Vertex prebuilt_tabular_managed_deploy_model Test Scenario
+#   include: prebuilt_tabular_managed_deploy_model.yml
+
+# - name: Execute Vertex prebuilt_tabular_managed_predict_model Test Scenario
+#   include: prebuilt_tabular_managed_predict_model.yml
+
+# ---------------------- hyperparameter tunning --------------#
+
+# - name: Execute Vertex hyperparameter_tuning Test Scenario
+#   include: hyperparameter_tuning_setup.yml
+
+# - name: Execute Vertex hyperparameter_tuning Test Scenario
+#   include: hyperparameter_tuning_rest_api.yml
+
+# - name: Execute Vertex hyperparameter_tuning Test Scenario
+#   include: hyperparameter_tuning_cmd_line.yml
+
+# - name: Execute Vertex hyperparameter_tuning Test Scenario
+#   include: hyperparameter_tuning_python_client.yml

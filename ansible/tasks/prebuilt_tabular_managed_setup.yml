@@ -1,0 +1,16 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on VAI-Prebuilt Container Trained Custom Tabular Models from VAI-managed datasets (vmds) as Follows:
+
+# ---------------------upload the training data into the GCS targeted location ---------------#
+- name: upload training data to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp {{ role_path }}/files/ca_housing_mhv.csv
+    {{ automl_bucket }}vai_testing/ansible/custom/tabular/ca_housing/ca_housing_mhv.csv
+  changed_when: false
+
+- name: upload training application to GCS bucket
+  ansible.builtin.command: >
+    gsutil cp {{ role_path }}/files/ca_housing_mhv_vmds-1.0.tar.gz
+    {{ automl_bucket }}vai_testing/ansible/custom/tabular/ca_housing/ca_housing_mhv_vmds-1.0.tar.gz
+  changed_when: false

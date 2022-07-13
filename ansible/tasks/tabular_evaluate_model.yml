@@ -1,0 +1,24 @@
+---
+
+# Verify that user can evaluate an AutoML-tabular model via Vertex AI
+
+- name: Evaluate tabular model
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models/{{ model_id }}/evaluations"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: evaluate_model_tabular_response
+
+- name: Set status flag
+  ansible.builtin.set_fact: evaluate_tabular_model_status="Passed"
+  when: evaluate_model_tabular_response.status == 200
+
+- name: Log evaluate tabular-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Evaluate tabular Model" {{ evaluate_tabular_model_status }}
+    "User can Evaluate tabular-Model" "https://rb.gy/zdclpq"
+  args:
+    executable: python3

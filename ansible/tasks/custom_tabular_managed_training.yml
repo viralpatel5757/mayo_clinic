@@ -1,0 +1,125 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom Container Trained Custom Tabular Models from VAI-managed datasets (vmds) as Follows:
+# 1) Verify that user can train a Custom Tabular model from the VAI-managed dataset via a training pipeline
+#    with custom-built training container + pre-built serving (prediction) container
+
+# --------------------------------------- Training a Model--------------------------------#
+# Verify that user can train an custom_tabular_managed model via Vertex AI
+
+# ------- Scenario 1 : custom_tabular_managed model already exists in respective project ----#
+- name: Get the List of existing models.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_list
+
+- name: get the list of existing model names
+  ansible.builtin.set_fact:
+    model_name_list: "{{ (model_list.json.models | map (attribute='displayName')) }}"
+  when: "model_list.json is defined"
+
+- name: get model id of existing model
+  ansible.builtin.set_fact:
+    model_id: "{{ model_list.json.models | json_query(query) | map('split', '/')|map(attribute=5)|list |first }}"
+  vars:
+    query: "[?displayName == 'custom_tabular_managed_training'].name"
+  when:
+    - model_name_list is defined
+    - "'custom_tabular_managed_training' in model_name_list"
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_custom_tabular_managed_status="Passed"
+  when:
+    - model_name_list is defined
+    - "'custom_tabular_managed_training' in model_name_list"
+
+- name: Log train-custom_tabular_managed-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Train custom_tabular_managed Dataset" {{ train_custom_tabular_managed_status }}
+    "User can train  VAI-custom Container Custom tabular Models from VAI-managed datasets" "https://rb.gy/u7glwk"
+  args:
+    executable: python3
+  when:
+    - model_name_list is defined
+    - "'custom_tabular_managed_training' in model_name_list"
+
+# -------------Scenario 2 : custom_tabular_managed model does not exists in respective project--------#
+- name: Template entity training model
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/custom_tabular_managed_train.json.j2"
+    dest: "{{ role_path }}/files/custom_tabular_managed_train.json"
+    mode: 0644
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: train a custom_tabular_managed model
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/trainingPipelines"
+    method: POST
+    body: "{{ lookup('file','custom_tabular_managed_train.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: train_custom_tabular_managed_response
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: wait until custom_tabular_managed model gets trained
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/trainingPipelines/\
+         {{ train_custom_tabular_managed_response.json.name.split('/')[5] }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: train_custom_tabular_managed_response1
+  until: train_custom_tabular_managed_response1.json.state == "PIPELINE_STATE_SUCCEEDED"
+  retries: 30
+  delay: 90
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: set model name
+  ansible.builtin.set_fact:
+    model_name: "{{ train_custom_tabular_managed_response.json.modelToUpload.displayName }}"
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: Get custom_tabular_managed model information
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/models?filter=display_name={{ model_name }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: model_custom_tabular_managed_response
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: set model ID
+  ansible.builtin.set_fact:
+    model_id: "{{ model_custom_tabular_managed_response.json.models.0.name.split('/')[5] }}"
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: showing the model id
+  ansible.builtin.debug:
+    msg: "{{ model_id }}"
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+
+- name: Set status flag
+  ansible.builtin.set_fact: train_custom_tabular_managed_status="Passed"
+  when:
+    - "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"
+    - train_custom_tabular_managed_response1.json.state == "PIPELINE_STATE_SUCCEEDED"
+
+- name: Log train custom_tabular_managed-dataset API results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "Train custom_tabular_managed Dataset" {{ train_custom_tabular_managed_status }}
+    "User can train custom_tabular_managed-dataset" "https://rb.gy/u7glwk"
+  args:
+    executable: python3
+  when: "(model_name_list is not defined) or ('custom_tabular_managed_training' not in model_name_list)"

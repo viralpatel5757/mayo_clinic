@@ -1,0 +1,46 @@
+---
+
+# Verify that user can make an online prediction from a deployed AutoML-image model via Vertex AI
+
+- name: base64
+  ansible.builtin.command: base64 -w 0 {{ role_path }}/files/daisy.jpg
+  register: daisy_txt
+  changed_when: false
+
+- name: Template entity  model prediction
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/image_model_prediction.json.j2"
+    dest: "{{ role_path }}/files/image_model_prediction.json"
+    mode: 0644
+
+- name: Execute ansible.builtin.command to perform online prediction using image Automl model
+  ansible.builtin.command: >
+    gcloud ai endpoints predict {{ endpoint_id }} --region={{ vertex_region }}
+    --json-request={{ role_path }}/files/image_model_prediction.json
+  register: predict_model_response
+  changed_when: false
+
+- name: prediction information
+  ansible.builtin.debug:
+    msg: "{{ predict_model_response.stdout }}"
+
+- name: Set status flag
+  ansible.builtin.set_fact: predict_image_model_status="Passed"
+  when: predict_model_response.stdout | length > 0
+
+- name: Log predict using image-model results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "predict using image model" {{ predict_image_model_status }}
+    "User can do prediction using image model" "https://rb.gy/oxfogb"
+  args:
+    executable: python3
+  when: predict_model_response.stdout | length > 0
+
+- name: Cleanup duplicate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ role_path }}/files/image_train.json"
+    - "{{ role_path }}/files/daisy.txt"
+    - "{{ role_path }}/files/image_model_prediction.json"

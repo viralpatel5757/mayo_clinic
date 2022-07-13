@@ -1,0 +1,65 @@
+---
+# Verify that user can create an image dataset via Vertex AI
+
+# ------------- Scenario 1 : image Dataset already exists in respective project -----------------------#
+
+- name: Check whether a image dataset named "test_new_image_dataset" exist or not through API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: dataset_list
+
+- name: get dataset name
+  ansible.builtin.set_fact:
+    dataset_name: "{{ (dataset_list.json.datasets | map (attribute='displayName')) }}"
+  when: dataset_list.json | length > 0
+
+- name: get dataset id
+  ansible.builtin.set_fact:
+    dataset_id: >-
+      {{
+       dataset_list.json.datasets
+       | json_query(query)
+       | map('split', '/')
+       | map(attribute=5)
+       | list
+       | first
+      }}
+  vars:
+    query: "[?displayName == 'test_new_image_dataset'].name"
+  when: "(dataset_name is defined) and ('test_new_image_dataset' in dataset_name)"
+
+# ----- Scenario 2 : image Dataset does not exists in respective project, So create an image Dataset ---#
+
+- name: Create an image dataset API
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/datasets"
+    method: POST
+    body: "{{ lookup('file','image_request.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: dataset_info
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: set datset id
+  ansible.builtin.set_fact:
+    dataset_id: "{{ dataset_info.json.name.split('/')[5] }}"
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+
+- name: Pause for 10 seconds
+  when: >
+    (dataset_name is not defined) or
+    ((dataset_name is defined) and ('test_new_image_dataset' not in dataset_name))
+  ansible.builtin.pause:
+    seconds: 10

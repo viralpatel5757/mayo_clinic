@@ -1,0 +1,84 @@
+---
+
+# Verify that user can create an endpoint via Vertex AI
+
+# --------------- Scenario 1 : image endpoint already exists in respective project --------------------------#
+
+- name: Get the List of existing endpoints.
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/endpoints"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: endpoint_list
+
+- name: get the list of existing endpoints names
+  ansible.builtin.set_fact:
+    endpoint_name_list: "{{ (endpoint_list.json.endpoints | map (attribute='displayName')) }}"
+  when: "endpoint_list.json is defined"
+
+- name: get endpoint id of existing endpoint
+  ansible.builtin.set_fact:
+    endpoint_id: >
+      {{ endpoint_list.json.endpoints | json_query(query) | map('split', '/')|map(attribute=5)|list |first }}
+  vars:
+    query: "[?displayName == 'image_endpoint'].name"
+  when:
+    - endpoint_name_list is defined
+    - "'image_endpoint' in endpoint_name_list"
+
+- name: Set status flag
+  ansible.builtin.set_fact: create_image_endpoint_status="Passed"
+  when:
+    - endpoint_name_list is defined
+    - "'image_endpoint' in endpoint_name_list"
+
+- name: Log create image-endpoint results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "create Image endpoint" {{ create_image_endpoint_status }}
+    "User can create an image endpoint" "https://rb.gy/lxrebt"
+  args:
+    executable: python3
+  when:
+    - endpoint_name_list is defined
+    - "'image_endpoint' in endpoint_name_list"
+
+# --------------- Scenario 2 : image endpoint does not exists in respective project --------------#
+- name: create an endpoint
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/endpoints"
+    method: POST
+    body: "{{ lookup('file','image_create_endpoint.json') }}"
+    body_format: json
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: create_image_endpoint_response
+  when: "(endpoint_name_list is not defined) or ('image_endpoint' not in endpoint_name_list)"
+
+- name: set endpoint ID
+  ansible.builtin.set_fact:
+    endpoint_id: "{{ create_image_endpoint_response.json.name.split('/')[5] }}"
+  when: "(endpoint_name_list is not defined) or ('image_endpoint' not in endpoint_name_list)"
+
+- name: Pause for 10 seconds
+  when: "(endpoint_name_list is not defined) or ('image_endpoint' not in endpoint_name_list)"
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: Set status flag
+  ansible.builtin.set_fact: create_image_endpoint_status="Passed"
+  when:
+    - "(endpoint_name_list is not defined) or ('image_endpoint' not in endpoint_name_list)"
+    - create_image_endpoint_response.status == 200
+
+- name: Log create image-endpoint results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "create Image endpoint" {{ create_image_endpoint_status }}
+    "User can create an image endpoint" "https://rb.gy/lxrebt"
+  args:
+    executable: python3
+  when: "(endpoint_name_list is not defined) or ('image_endpoint' not in endpoint_name_list)"

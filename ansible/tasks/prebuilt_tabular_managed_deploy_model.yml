@@ -1,0 +1,33 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on VAI-Prebuilt Container Trained Custom Tabular Models from VAI-managed datasets (vmds) as Follows:
+# 1) Verify that user can deploy the trained Custom Tabular model to a Vertex AI endpoint
+
+# --------------------------------------- deploy model to an endpoint --------------------------------#
+
+# Verify that user can deploy an prebuilt_tabular_managed model to an endpoint via Vertex AI
+
+# ---- Scenario 1 : prebuilt_tabular_managed model already deployed to respective endpoint -----#
+
+- name: get list of already deployed models to an "prebuilt_tabular_managed_endpoint" endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints describe {{ endpoint_id }} --project={{ project }} --region={{ vertex_region }}
+    --flatten=deployedModels[] --format=csv(deployedModels.displayName)
+  register: deploy_prebuilt_tabular_managed_model_response
+  when:
+     - endpoint_name_list is defined
+     - "'prebuilt_tabular_managed_endpoint' in endpoint_name_list"
+
+# --- Scenario 2 : prebuilt_tabular_managed model has not been deployed to respective endpoint,
+#                  thus deploying the prebuilt_tabular_managed model ------------#
+
+- name: deploy the model to an endpoint
+  ansible.builtin.command: >
+    gcloud ai endpoints deploy-model {{ endpoint_id }} --region={{ vertex_region }} --model={{ model_id }}
+    --display-name=deploy_prebuilt_tabular_managed_model --machine-type=n1-standard-2 --min-replica-count=1
+    --max-replica-count=1 --traffic-split=0=100
+  register: newly_deploy_prebuilt_tabular_managed_model_response
+  when: >
+    (deploy_prebuilt_tabular_managed_model_response.stdout is not defined) or
+    ((deploy_prebuilt_tabular_managed_model_response.stdout is defined) and
+    ('deploy_prebuilt_tabular_managed_model' not in deploy_prebuilt_tabular_managed_model_response.stdout))

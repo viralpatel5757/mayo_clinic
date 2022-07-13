@@ -1,0 +1,78 @@
+---
+# Note: This test scenario is to Test User can use Vertex AI (VAI)
+#       on Custom-Built Container Hyperparameter Tuning using VAI-un-managed datasets (vumds) as Follows:
+
+# Verify that user can cancel a Commandline-Initiated running Hypptune job
+# using the Custom-Built Hypptune Container via Commandline
+
+# --------------- create, cancel and delete hyperparameter_tuning_job via cmd line -----------------#
+
+- name: Template entity to Start a training hypptune job
+  ansible.builtin.template:
+    src: "{{ role_path }}/files/hyperparameter_tuning_config.yml.j2"
+    dest: "{{ role_path }}/files/hyperparameter_tuning_config.yml"
+    mode: 0644
+
+- name: Start a training hypptune job via Commandline for simplicity
+  ansible.builtin.command: |
+    gcloud ai hp-tuning-jobs create --project={{ project }} --region={{ vertex_region }}
+    --display-name=hyperparameter_tuning_job_cmd_line --max-trial-count=8 --parallel-trial-count=2
+    --config={{ role_path }}/files/hyperparameter_tuning_config.yml
+  register: hyper_tuning_job_api
+  changed_when: false
+
+- name: get the hyper_tuning_job id
+  ansible.builtin.set_fact:
+    hyper_tuning_job_id: "{{ hyper_tuning_job_api.stderr_lines |select('search', 'describe') |regex_search('(\\d+)') }}"
+
+- name: Wait for 5 sec
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Canceling the running hypptune job via cmd line
+  ansible.builtin.command: |
+    gcloud ai hp-tuning-jobs cancel {{ hyper_tuning_job_id }} --project={{ project }}
+    --region={{ vertex_region }}
+  register: hypptune_job_cancel_cmd_line
+  changed_when: false
+
+- name: Waiting until the training job gets canceled
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/hyperparameterTuningJobs/{{ hyper_tuning_job_id }}"
+    method: GET
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: hypptune_job_cancel_cmd_line1
+  until: hypptune_job_cancel_cmd_line1.json.state == "JOB_STATE_CANCELLED"
+  retries: 12
+  delay: 5
+
+- name: Set status flag
+  ansible.builtin.set_fact: hypptune_job_cancel_cmd_line_status="Passed"
+  when: hypptune_job_cancel_cmd_line1.json.state == "JOB_STATE_CANCELLED"
+
+- name: Log perform_hyper_tuning_job results
+  ansible.builtin.script: >
+    log.py "Vertex AI" "cancel hyperparameter_tuning_job" {{ hypptune_job_cancel_cmd_line_status }}
+    "User can cancel hyperparameter_tuning_job via cmd line" "https://rb.gy/cpujfi"
+  args:
+    executable: python3
+
+- name: Delete the previously canceled Hypptune job (clean up process)
+  ansible.builtin.uri:
+    url: "https://{{ vertex_region }}-aiplatform.googleapis.com/v1/projects/{{ project }}/\
+         locations/{{ vertex_region }}/hyperparameterTuningJobs/{{ hyper_tuning_job_id }}"
+    method: DELETE
+    headers:
+      Content-Type: "application/json"
+      Authorization: Bearer "{{ gcloud_auth }}"
+  register: hypptune_job_delete_cmd_restapi
+
+- name: Cleanup duplicate files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  with_items:
+    - "{{ role_path }}/files/hyperparameter_tuning_config.yml"
